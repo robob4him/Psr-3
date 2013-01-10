@@ -1,39 +1,81 @@
-<?php
+<?php namespace Psr;
 
-use Psr\Log;
+/**
+ * PSR logger
+ *
+ * @uses AbstractLogger
+ * @package Psr
+ * @subpackage Example
+ * @author Robert Koller <robob4him@gmail.com>
+ * @license BSD
+ */
+class Logger extends Log\AbstractLogger {
+    use Log\LoggerAwareTrait;
 
-class Logger extends AbstractLogger {
-    use LoggerAwareTrait;
-
+    /**
+     * Array of conversion levels
+     *
+     * PSR 3 Log levels are string-based,
+     * which is anti-PHP. Here
+     * we can convert them to PHP levels
+     * and still maintain compatibility.
+     *
+     * @var array
+     * @access protected
+     */
     protected $_aLevels = array(
-                            'emergency' => LOG_EMERG,
-                            'alert'     => LOG_ALERT,
-                            'critical'  => LOG_CRIT,
-                            'error'     => LOG_ERR,
-                            'warning'   => LOG_WARNING,
-                            'notice'    => LOG_NOTICE,
-                            'info'      => LOG_INFO,
-                            'debug'     => LOG_DEBUG,
+                            'emergency' => 0,
+                            'alert'     => 1,
+                            'critical'  => 2,
+                            'error'     => 3,
+                            'warning'   => 4,
+                            'notice'    => 5,
+                            'info'      => 6,
+                            'debug'     => 7,
                         );
 
+    /**
+     * Constants-to-string
+     *
+     * Representation of PHP levels
+     *
+     * @var array
+     * @access protected
+     */
     protected $_sLevels = array(
-                            LOG_EMERG   => 'EMERG',
-                            LOG_ALERT   => 'ALERT',
-                            LOG_CRIT    => 'CRIT',
-                            LOG_ERR     => 'ERR',
-                            LOG_WARNING => 'WARN',
-                            LOG_NOTICE  => 'NOTICE',
-                            LOG_INFO    => 'INFO',
-                            LOG_DEBUG   => 'DEBUG',
+                            0 => 'EMERG',
+                            1 => 'ALERT',
+                            2 => 'CRIT',
+                            3 => 'ERR',
+                            4 => 'WARN',
+                            5 => 'NOTICE',
+                            6 => 'INFO',
+                            7 => 'DEBUG',
                         );
 
+    /**
+     * Error string format
+     *
+     * @var string
+     * @access protected
+     */
     protected $_format = '%s: %s';
 
+    /**
+     * Log error
+     *
+     * @param mixed $level Error level (string or PHP syslog priority)
+     * @param mixed $message Error message
+     * @param array $context Contextual array
+     *
+     * @access public
+     * @return void
+     */
     public function log($level, $message, array $context = array()) {
         if (is_string($level)) {
             if (! array_key_exists($level, $this->_aLevels)) {
                 $exMsg = "Log level {$level} is not valid. Please use syslog levels instead.";
-                throw new Exception\InvalidArgumentException($exMsg);
+                throw new Log\Exception\InvalidArgumentException($exMsg);
             } else {
                 $level = $this->_aLevels[$level];
             }
@@ -41,7 +83,7 @@ class Logger extends AbstractLogger {
         if (array_key_exists('exception', $context)) {
             if($context['exception'] instanceof \Exception) {
                 $exc = $context['exception'];
-                $message .= "Exception: {$exc->getMessage()}";
+                $message .= " Exception: {$exc->getMessage()}";
                 unset($context['exception']);
             } else {
                 unset($context['exception']);
@@ -50,18 +92,39 @@ class Logger extends AbstractLogger {
 
         if (null !== $this->logger) {
             $this->logger->log(sprintf($this->_format, $this->_sLevels[$level],
-                                                       $message));
+                                                       $this->interpolate($message, $context)));
         }
     }
 
+    /**
+     * Log an Exception
+     *
+     * @param mixed $level Error level (string or PHP syslog priority)
+     * @param mixed $message Error message
+     * @param array $context Contextual array
+     * @param mixed $exception Exception
+     *
+     * @access public
+     * @return void
+     */
     public function logException($level, $message, array $context = array(), $exception = null) {
         $this->log($level, $message, array_merge($context, array('exception'=>$exception)));
     }
 
-    protected function interpolate($string, array $params = array()) {
+    /**
+     * Interpolate string with parameters
+     *
+     * @param mixed $string String with parameters
+     * @param array $params Parameter arrays
+     *
+     * @access protected
+     * @return void
+     */
+    public function interpolate($string, array $params = array()) {
         foreach($params as $placeholder => $value) {
-            $string = strtr($string, '{' . (string) $placeholder . '}', (string) $value);
+            $params['{' . (string) $placeholder . '}'] = (string) $value;
+            unset($params[$placeholder]);
         }
-        return $string;
+        return strtr($string, $params);
     }
 }
